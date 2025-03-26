@@ -7,8 +7,8 @@ import { Toaster } from "@/components/ui/sonner";
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-    title: 'Login - Dashboard Viewer',
-    description: 'Login to access the BI Dashboard Viewer',
+    title: 'Login - Lince Dashviewer',
+    description: 'Login para acessar o Dashviewer.',
 };
 
 export default async function LoginPage() {

@@ -2,6 +2,12 @@
 import ForgotPasswordForm from '../_components/auth/forgot-password-form';
 import { Logotype } from '@/components/logotype';
 import { Toaster } from "@/components/ui/sonner";
+import { Metadata } from 'next';
+
+export const metadata: Metadata = {
+    title: 'Reset de Senha - Lince Dashviewer',
+    description: 'Realize a sua mudança de senha.',
+};
 
 export default function ForgotPasswordPage() {
     return (

@@ -1,6 +1,12 @@
 // src/app/page.tsx
 import { redirect } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
+import { Metadata } from 'next';
+
+export const metadata: Metadata = {
+    title: 'Reset de Senha - Lince Dashviewer',
+    description: 'Reset de senha para acessar o Dashviewer.',
+};
 
 export default async function Home() {
     const supabase = createClient();

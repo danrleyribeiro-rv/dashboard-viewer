@@ -5,14 +5,15 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from '@/components/ui/sonner';
 import { Metadata } from 'next';
 import { ReactNode } from 'react';
+import { icons } from 'lucide-react';
 
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-    title: 'Lince - Dashboard Viewer',
+    title: 'Lince - Dashviewer',
     description: 'BI Dashboard Viewer Application from Lince',
+    icons: {icon: './favicon.ico'}
 }
-
 interface RootLayoutProps {
     children: ReactNode;
 }

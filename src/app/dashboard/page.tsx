@@ -21,7 +21,6 @@ export default function DashboardPage() {
     return (
         <div>
             <BIViewer dashboardUrl={dashboardUrl} />
-            {/* No longer passing onDashboardNameChange to DashboardHeader, name is managed in DashboardPage and passed down */}
         </div>
     );
 }

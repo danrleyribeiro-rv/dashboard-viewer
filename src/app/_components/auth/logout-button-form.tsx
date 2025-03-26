@@ -21,11 +21,23 @@ export default function LogoutButton() {
                 toast.error(`Logout Error: ${error.message}`);
                 console.error("Logout Error:", error);
             } else {
+                // Clear all local storage to ensure session data is removed
+                localStorage.clear();
+                
+                // Clear cookies
+                document.cookie.split(";").forEach(function(c) {
+                    document.cookie = c
+                        .replace(/^ +/, "")
+                        .replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+                });
+                
                 toast.success("Logout realizado com sucesso!");
-                router.push('/login');
+                
+                // Force reload page to clear any caches
+                window.location.href = '/login';
             }
         } catch (error: any) {
-            toast.error(`um erro inesperado ocorreu: ${error.message}`);
+            toast.error(`Um erro inesperado ocorreu: ${error.message}`);
             console.error("Erro inesperado:", error);
         } finally {
             setLoading(false);

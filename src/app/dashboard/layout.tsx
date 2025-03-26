@@ -1,39 +1,43 @@
 // src/app/dashboard/layout.tsx
-"use client";
-
-import DashboardHeader from '../_components/dashboard/dashboard-header';
-import BIViewer from '../_components/dashboard/dashboard-viewer';
+import { redirect } from 'next/navigation';
+import { createClient } from '@/utils/supabase/server';
 import { Toaster } from "@/components/ui/sonner";
-import { ReactNode, useState } from 'react';
+import ClientSideWrapper from './client-wrapper';
 
-interface DashboardLayoutProps {
-    children: ReactNode;
-}
+export const dynamic = 'force-dynamic';
 
-export default function DashboardLayout({ children }: DashboardLayoutProps) {
-    const [dashboardUrl, setDashboardUrl] = useState<string | null>(null);
-    const [selectedDashboardName, setSelectedDashboardName] = useState<string | null>(null); // State for dashboard name
+export default async function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const supabase = await createClient();
+  
+  // Usar getUser() em vez de getSession() para maior segurança
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  
+  if (authError || !user) {
+    redirect('/login');
+  }
+  
+  // Usar a função RPC que ignora RLS
+  const { data: clients, error } = await supabase.rpc('get_all_clients');
+  
+  // Verificar se o usuário está na lista
+  const userExists = Array.isArray(clients) && clients.some(client => 
+    client.id === user.id
+  );
 
-    const handleDashboardChange = (url: string, name: string) => {
-        setDashboardUrl(url);
-        setSelectedDashboardName(name); // Update dashboard name when dashboard changes
-    };
-
-    const handleDashboardNameChange = (name: string) => {
-        setSelectedDashboardName(name); // Callback to set initial dashboard name
-    };
-
-    return (
-        <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
-            <DashboardHeader
-                onDashboardChange={handleDashboardChange}
-                selectedDashboardName={selectedDashboardName} // Pass selected dashboard name to header
-            />
-            <main className="py-10 px-4 sm:px-6 lg:px-8">
-                <BIViewer dashboardUrl={dashboardUrl} /> { /* BIViewer is now rendered here to receive dashboardUrl */ }
-                {children}
-            </main>
-            <Toaster />
-        </div>
-    );
+  
+  if (error || !userExists) {
+    console.log('User not authorized:', user.id);
+    redirect('/not-authorized');
+  }
+  
+  return (
+    <div className="h-screen flex flex-col overflow-hidden bg-gray-100 dark:bg-gray-900">
+      <ClientSideWrapper userId={user.id} />
+      <Toaster />
+    </div>
+  );
 }

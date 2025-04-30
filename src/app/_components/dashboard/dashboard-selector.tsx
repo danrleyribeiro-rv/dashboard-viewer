@@ -5,60 +5,40 @@ import React, { useState, useEffect } from 'react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { ChevronDown, LayoutDashboardIcon } from "lucide-react";
-import { createClient } from '@/utils/supabase/client';
+import { getDashboardsByUserId } from '@/lib/firebase/firestore';
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
-
-interface Dashboard {
-    id: number;
-    name: string;
-    iframe_url: string;
-}
+import { useAuth } from '@/context/auth-context';
+import { type Dashboard } from '@/lib/firebase/firestore';
 
 interface DashboardSelectorProps {
-    onDashboardChange: (url: string, dashboardName: string) => void; // Modified onDashboardChange to include dashboardName
-    onDashboardNameChange?: (dashboardName: string) => void; // Optional callback to pass dashboard name up
+    onDashboardChange: (url: string, dashboardName: string) => void;
+    onDashboardNameChange?: (dashboardName: string) => void;
 }
 
 export default function DashboardSelector({ onDashboardChange, onDashboardNameChange }: DashboardSelectorProps) {
     const [dashboards, setDashboards] = useState<Dashboard[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
     const [selectedDashboard, setSelectedDashboard] = useState<Dashboard | null>(null);
-    const [session, setSession] = useState<any>(null);
-    const supabase = createClient();
-
-    useEffect(() => {
-        const fetchSession = async () => {
-            const currentSession = await supabase.auth.getSession();
-            setSession(currentSession.data.session);
-        };
-        fetchSession();
-    }, []);
+    const { user } = useAuth();
 
     useEffect(() => {
         const fetchDashboards = async () => {
             setLoading(true);
             try {
-                if (session?.user) {
-                    const { data, error } = await supabase
-                        .from('dashboards')
-                        .select('*')
-                        .eq('user_id', session.user.id)
-                        .order('name', { ascending: true });
-
-                    if (error) {
-                        console.error("Error fetching dashboards:", error);
-                        toast.error("Error fetching dashboards");
-                    } else if (data && data.length > 0) {
-                        setDashboards(data);
-                        const firstDashboard = data[0];
+                if (user) {
+                    const dashboardData = await getDashboardsByUserId(user.uid);
+                    
+                    if (dashboardData.length > 0) {
+                        setDashboards(dashboardData);
+                        const firstDashboard = dashboardData[0];
                         setSelectedDashboard(firstDashboard);
 
                         if (onDashboardChange && firstDashboard) {
-                            onDashboardChange(firstDashboard.iframe_url, firstDashboard.name); // Pass dashboard name here
+                            onDashboardChange(firstDashboard.iframe_url, firstDashboard.name);
                         }
                         if (onDashboardNameChange && firstDashboard) {
-                            onDashboardNameChange(firstDashboard.name); // Initialize dashboard name in header
+                            onDashboardNameChange(firstDashboard.name);
                         }
                     } else {
                         toast.error("Não há dashboards disponíveis");
@@ -72,20 +52,20 @@ export default function DashboardSelector({ onDashboardChange, onDashboardNameCh
             }
         };
 
-        if (session) {
+        if (user) {
             fetchDashboards();
         } else {
             setLoading(false);
         }
-    }, [supabase, onDashboardChange, session, onDashboardNameChange]);
+    }, [user, onDashboardChange, onDashboardNameChange]);
 
     const handleDashboardChange = (dashboard: Dashboard) => {
         setSelectedDashboard(dashboard);
         if (onDashboardChange) {
-            onDashboardChange(dashboard.iframe_url, dashboard.name); // Pass dashboard name here
+            onDashboardChange(dashboard.iframe_url, dashboard.name);
         }
         if (onDashboardNameChange) {
-            onDashboardNameChange(dashboard.name); // Update dashboard name in header
+            onDashboardNameChange(dashboard.name);
         }
     };
 
@@ -101,7 +81,6 @@ export default function DashboardSelector({ onDashboardChange, onDashboardNameCh
             </Button>
         );
     }
-
 
     return (
         <DropdownMenu>

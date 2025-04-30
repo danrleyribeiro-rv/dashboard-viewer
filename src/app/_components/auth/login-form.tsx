@@ -3,12 +3,14 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/utils/supabase/client';
+import { signIn } from '@/lib/firebase/auth';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Link from 'next/link';
 import { toast } from "sonner";
 import { EyeIcon, EyeOffIcon } from "lucide-react";
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '@/lib/firebase/config';
 
 export default function LoginForm() {
     const [email, setEmail] = useState<string>('');
@@ -16,7 +18,34 @@ export default function LoginForm() {
     const [loading, setLoading] = useState<boolean>(false);
     const [showPassword, setShowPassword] = useState<boolean>(false);
     const router = useRouter();
-    const supabase = createClient();
+
+    const checkClientExists = async (userEmail: string, userId: string) => {
+        try {
+            // First check if the user has client role
+            const usersRef = collection(db, 'users');
+            const userQuery = query(usersRef, where('email', '==', userEmail));
+            const userSnapshot = await getDocs(userQuery);
+            
+            if (userSnapshot.empty) {
+                return false;
+            }
+            
+            const userData = userSnapshot.docs[0].data();
+            if (userData.role !== 'client') {
+                return false;
+            }
+            
+            // Then check if the user exists in clients collection
+            const clientsRef = collection(db, 'clients');
+            const clientQuery = query(clientsRef, where('user_id', '==', userId));
+            const clientSnapshot = await getDocs(clientQuery);
+            
+            return !clientSnapshot.empty;
+        } catch (error) {
+            console.error("Error checking client:", error);
+            return false;
+        }
+    };
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -29,21 +58,33 @@ export default function LoginForm() {
         setLoading(true);
 
         try {
-            const { error } = await supabase.auth.signInWithPassword({
-                email,
-                password,
-            });
-
-            if (error) {
-                toast.error(`Erro ao fazer login: ${error.message}`);
-                console.error("Erro ao fazer login:", error);
-            } else {
+            const userCredential = await signIn(email, password);
+            
+            // Check if the email exists in the clients collection
+            const isAuthorized = await checkClientExists(email, userCredential.user.uid);
+            
+            if (isAuthorized) {
                 toast.success("Login realizado com sucesso!");
                 router.push('/dashboard');
+            } else {
+                // Sign out the user if they're not authorized
+                await signIn(email, password);
+                toast.error("Usuário não autorizado. Por favor, entre em contato com o administrador.");
+                router.push('/not-authorized');
             }
         } catch (error: any) {
-            toast.error(`Erro inesperado: ${error.message}`);
-            console.error("Erro inesperado:", error);
+            console.error("Erro ao fazer login:", error);
+            
+            // Handle specific Firebase auth errors
+            if (error.code === 'auth/invalid-credential') {
+                toast.error("Email ou senha inválidos.");
+            } else if (error.code === 'auth/user-disabled') {
+                toast.error("Este usuário está desativado.");
+            } else if (error.code === 'auth/too-many-requests') {
+                toast.error("Muitas tentativas de login. Tente novamente mais tarde.");
+            } else {
+                toast.error(`Erro ao fazer login: ${error.message}`);
+            }
         } finally {
             setLoading(false);
         }
@@ -121,7 +162,6 @@ export default function LoginForm() {
                     </Link>
                 </div>
             </div>
-
         </form>
     );
 }

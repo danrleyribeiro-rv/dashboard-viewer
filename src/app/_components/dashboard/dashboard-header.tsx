@@ -26,7 +26,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({ onDashboardChange, cl
     };
 
     return (
-        <header className="bg-white dark:bg-gray-800 shadow-md sticky top-0 z-50"> {/* Added sticky top-0 z-50 */}
+        <header className="bg-white dark:bg-gray-800 shadow-md sticky top-0 z-50">
             <div className="container mx-auto px-2 py-3 flex justify-between items-center">
                 {/* Logo and Company Name (Left) */}
                 <div className="flex items-center">
@@ -35,7 +35,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({ onDashboardChange, cl
                 </div>
 
                 {/* Dashboard Selector (Center) */}
-                <div className="flex items-center flex-grow justify-center"> {/* Adjusted to justify-center */}
+                <div className="flex items-center flex-grow justify-center">
                     {showSelector && onDashboardChange && <DashboardSelector onDashboardChange={onDashboardChange} />}
                 </div>
 

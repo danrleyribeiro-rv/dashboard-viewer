@@ -1,11 +1,13 @@
 // src/app/actions/auth.ts
 'use server';
 
-import { createClient } from '@/utils/supabase/server';
 import { redirect } from 'next/navigation';
+import { cookies } from 'next/headers';
 
 export async function logoutAction() {
-  const supabase = await createClient();
-  await supabase.auth.signOut();
+  // Clear the auth cookie
+  (await cookies()).delete('__session');
+  
+  // Redirect to login page
   redirect('/login');
 }

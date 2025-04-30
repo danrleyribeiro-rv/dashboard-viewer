@@ -1,64 +1,45 @@
 // middleware.ts
-import { NextResponse, type NextRequest } from 'next/server'
-import { createServerClient } from '@supabase/ssr'
+import { NextResponse, type NextRequest } from 'next/server';
+import { cookies } from 'next/headers';
 
+// This function can be marked `async` if using `await` inside
 export async function middleware(request: NextRequest) {
-  let response = NextResponse.next({
-    request: {
-      headers: request.headers,
-    },
-  })
+  // Skip middleware for static assets and API routes
+  if (
+    request.nextUrl.pathname.startsWith('/_next') ||
+    request.nextUrl.pathname.startsWith('/api') ||
+    request.nextUrl.pathname.match(/\.(ico|png|jpg|jpeg|svg|css|js)$/)
+  ) {
+    return NextResponse.next();
+  }
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name) {
-          return request.cookies.get(name)?.value
-        },
-        set(name, value, options) {
-          response.cookies.set({
-            name,
-            value,
-            ...options,
-          })
-        },
-        remove(name, options) {
-          response.cookies.set({
-            name,
-            value: '',
-            ...options,
-          })
-        },
-      },
-    }
-  )
-
-  // Public routes that don't need client validation
-  const publicRoutes = ['/login', '/auth', '/not-authorized', '/forgot-password', '/reset-password']
-  const isPublicRoute = publicRoutes.some(route => request.nextUrl.pathname.startsWith(route))
+  // Public routes that don't need authentication
+  const publicRoutes = ['/login', '/auth', '/not-authorized', '/forgot-password', '/reset-password'];
+  const isPublicRoute = publicRoutes.some(route => request.nextUrl.pathname.startsWith(route));
   
   // For public routes, just continue
   if (isPublicRoute) {
-    return response
+    return NextResponse.next();
   }
   
-  // Check if user is authenticated
-  const { data: { session } } = await supabase.auth.getSession()
+  // Check for Firebase auth token
+  const session = request.cookies.get('__session');
+  const fbToken = request.cookies.get('firebase-token');
   
-  // If no authenticated user, redirect to login
-  if (!session) {
-    const redirectUrl = request.nextUrl.clone()
-    redirectUrl.pathname = '/login'
-    return NextResponse.redirect(redirectUrl)
+  // If no auth cookie found, redirect to login
+  if (!session && !fbToken) {
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.pathname = '/login';
+    return NextResponse.redirect(redirectUrl);
   }
   
-  return response
+  // Auth cookie exists, allow the request to proceed
+  return NextResponse.next();
 }
 
+// See "Matching Paths" below to learn more
 export const config = {
   matcher: [
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:ico|svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
-}
+};

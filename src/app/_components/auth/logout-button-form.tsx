@@ -3,7 +3,7 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/utils/supabase/client';
+import { signOut } from '@/lib/firebase/auth';
 import { Button } from "@/components/ui/button";
 import { LogOutIcon } from "lucide-react";
 import { toast } from "sonner";
@@ -11,34 +11,22 @@ import { toast } from "sonner";
 export default function LogoutButton() {
     const [loading, setLoading] = useState<boolean>(false);
     const router = useRouter();
-    const supabase = createClient();
 
     const handleLogout = async () => {
         setLoading(true);
         try {
-            const { error } = await supabase.auth.signOut();
-            if (error) {
-                toast.error(`Logout Error: ${error.message}`);
-                console.error("Logout Error:", error);
-            } else {
-                // Clear all local storage to ensure session data is removed
-                localStorage.clear();
-                
-                // Clear cookies
-                document.cookie.split(";").forEach(function(c) {
-                    document.cookie = c
-                        .replace(/^ +/, "")
-                        .replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
-                });
-                
-                toast.success("Logout realizado com sucesso!");
-                
-                // Force reload page to clear any caches
-                window.location.href = '/login';
-            }
+            await signOut();
+            
+            // Clear local storage for good measure
+            localStorage.clear();
+            
+            toast.success("Logout realizado com sucesso!");
+            
+            // Redirect to login page
+            router.push('/login');
         } catch (error: any) {
+            console.error("Erro ao fazer logout:", error);
             toast.error(`Um erro inesperado ocorreu: ${error.message}`);
-            console.error("Erro inesperado:", error);
         } finally {
             setLoading(false);
         }

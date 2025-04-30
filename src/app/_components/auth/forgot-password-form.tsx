@@ -3,7 +3,7 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/utils/supabase/client';
+import { resetPassword } from '@/lib/firebase/auth';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
@@ -13,7 +13,6 @@ export default function ForgotPasswordForm() {
     const [email, setEmail] = useState<string>('');
     const [loading, setLoading] = useState<boolean>(false);
     const router = useRouter();
-    const supabase = createClient();
 
     const handleForgotPassword = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -26,21 +25,22 @@ export default function ForgotPasswordForm() {
         setLoading(true);
 
         try {
-            const { error } = await supabase.auth.resetPasswordForEmail(email, {
-                redirectTo: `${window.location.origin}/reset-password`,
-            });
-
-            if (error) {
-                toast.error(`Forgot Password Error: ${error.message}`);
-                console.error("Forgot Password Error:", error);
-            } else {
-                toast.success("E-mail para reset de senha foi enviado. Verifique a sua caixa de entrada.");
-                setEmail('');
+            await resetPassword(email);
+            toast.success("E-mail para reset de senha foi enviado. Verifique a sua caixa de entrada.");
+            setEmail('');
+            setTimeout(() => {
                 router.push('/login');
-            }
+            }, 3000);
         } catch (error: any) {
-            toast.error(`Ocorreu um erro inesperado: ${error.message}`);
-            console.error("Erro inesperado:", error);
+            console.error("Erro ao enviar email de recuperação:", error);
+            
+            if (error.code === 'auth/user-not-found') {
+                toast.error("Não existe uma conta com este email.");
+            } else if (error.code === 'auth/invalid-email') {
+                toast.error("O formato do email é inválido.");
+            } else {
+                toast.error(`Ocorreu um erro inesperado: ${error.message}`);
+            }
         } finally {
             setLoading(false);
         }
@@ -75,7 +75,7 @@ export default function ForgotPasswordForm() {
                                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
                             </svg>
-                            Sending...
+                            Enviando...
                         </>
                     ) : (
                         'Redefinir Senha'

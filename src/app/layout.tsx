@@ -5,7 +5,7 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from '@/components/ui/sonner';
 import { Metadata } from 'next';
 import { ReactNode } from 'react';
-import { icons } from 'lucide-react';
+import { AuthProvider } from '@/context/auth-context';
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -14,6 +14,7 @@ export const metadata: Metadata = {
     description: 'BI Dashboard Viewer Application from Lince',
     icons: {icon: './favicon.ico'}
 }
+
 interface RootLayoutProps {
     children: ReactNode;
 }
@@ -23,8 +24,10 @@ export default function RootLayout({ children }: RootLayoutProps) {
         <html lang="pt-BR">
             <body className={inter.className}>
                 <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-                    {children}
-                    <Toaster />
+                    <AuthProvider>
+                        {children}
+                        <Toaster />
+                    </AuthProvider>
                 </ThemeProvider>
             </body>
         </html>

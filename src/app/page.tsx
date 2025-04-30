@@ -1,22 +1,41 @@
 // src/app/page.tsx
-import { redirect } from 'next/navigation';
-import { createClient } from '@/utils/supabase/client';
-import { Metadata } from 'next';
+"use client";
 
-export const metadata: Metadata = {
-    title: 'Reset de Senha - Lince Dashviewer',
-    description: 'Reset de senha para acessar o Dashviewer.',
-};
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/context/auth-context';
 
-export default async function Home() {
-    const supabase = createClient();
-    const { data: { session } } = await supabase.auth.getSession();
+export default function Home() {
+    const router = useRouter();
+    const { user, loading } = useAuth();
+    const [isRedirecting, setIsRedirecting] = useState(false);
 
-    if (session) {
-        redirect('/dashboard');
-    } else {
-        redirect('/login');
-    }
+    useEffect(() => {
+        if (!loading) {
+            if (user) {
+                if (!isRedirecting) {
+                    setIsRedirecting(true);
+                    router.push('/dashboard');
+                }
+            } else {
+                if (!isRedirecting) {
+                    setIsRedirecting(true);
+                    router.push('/login');
+                }
+            }
+        }
+    }, [user, loading, router, isRedirecting]);
 
-    return <div />;
+    // Show a loading state while authenticating or redirecting
+    return (
+        <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
+            <div className="flex flex-col items-center">
+                <svg className="animate-spin h-10 w-10 text-indigo-600" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
+                </svg>
+                <p className="mt-2 text-gray-700 dark:text-gray-300">Carregando...</p>
+            </div>
+        </div>
+    );
 }

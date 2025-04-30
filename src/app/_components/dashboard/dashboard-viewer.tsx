@@ -2,9 +2,12 @@
 "use client";
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { createClient } from '@/utils/supabase/client';
 import { toast } from "sonner";
 import { AlertCircleIcon } from "lucide-react";
+import { useAuth } from '@/context/auth-context';
+import { addUsageData, addAccessLog } from '@/lib/firebase/firestore';
+import { collection, query, where, getDocs, limit } from 'firebase/firestore';
+import { db } from '@/lib/firebase/config';
 
 interface BIViewerProps {
     dashboardUrl: string | null;
@@ -21,12 +24,12 @@ export default function BIViewer({ dashboardUrl }: BIViewerProps) {
     const iframeRef = useRef<HTMLIFrameElement>(null);
     const [currentIframeUrl, setCurrentIframeUrl] = useState<string | null>(dashboardUrl);
     const [startTime, setStartTime] = useState<number | null>(null);
-    const [dashboardId, setDashboardId] = useState<number | null>(null);
+    const [dashboardId, setDashboardId] = useState<string | null>(null);
     const [mouseActivity, setMouseActivity] = useState<MouseActivityEvent[]>([]);
     const [lastActiveTime, setLastActiveTime] = useState<number>(Date.now());
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [loadError, setLoadError] = useState<boolean>(false);
-    const supabase = createClient();
+    const { user } = useAuth();
     const inactivityThreshold = 60000;
 
     useEffect(() => {
@@ -68,49 +71,31 @@ export default function BIViewer({ dashboardUrl }: BIViewerProps) {
     };
 
     const sendUsageData = async (eventType: string, eventData: any) => {
-        if (!dashboardId) return;
+        if (!dashboardId || !user) return;
 
         try {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session?.user) return;
-
-            const { error } = await supabase
-                .from('usage_data')
-                .insert([
-                    {
-                        user_id: session.user.id,
-                        dashboard_id: dashboardId,
-                        event_type: eventType,
-                        event_data: eventData,
-                        event_time: new Date().toISOString()
-                    }
-                ]);
-
-            if (error) {
-                console.error("Erro ao enviar dados de uso:", error);
-            }
+            await addUsageData({
+                user_id: user.uid,
+                dashboard_id: dashboardId,
+                event_type: eventType,
+                event_data: eventData,
+                event_time: new Date()
+            });
         } catch (error: any) {
             console.error("Erro ao enviar dados de uso:", error);
         }
     };
 
     const sendAccessLog = async (duration: number) => {
+        if (!dashboardId || !user) return;
+
         try {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session?.user || !dashboardId) return;
-
-            const { error } = await supabase
-                .from('access_logs')
-                .insert([{
-                    user_id: session.user.id,
-                    dashboard_id: dashboardId,
-                    duration,
-                    accessed_at: new Date().toISOString()
-                }]);
-
-            if (error) {
-                console.error("Erro ao enviar logs de acesso:", error);
-            }
+            await addAccessLog({
+                user_id: user.uid,
+                dashboard_id: dashboardId,
+                duration,
+                accessed_at: new Date()
+            });
         } catch (error: any) {
             console.error("Erro ao enviar logs de acesso:", error);
         }
@@ -119,24 +104,24 @@ export default function BIViewer({ dashboardUrl }: BIViewerProps) {
     useEffect(() => {
         const fetchDashboardId = async () => {
             try {
-                const { data: { session } } = await supabase.auth.getSession();
-                if (session?.user && currentIframeUrl) {
-                    const { data, error } = await supabase
-                        .from('dashboards')
-                        .select('id')
-                        .eq('iframe_url', currentIframeUrl)
-                        .limit(1)
-                        .single();
-
-                    if (error) {
-                        console.error("Erro ao buscar os dashboards por ID:", error);
+                if (user && currentIframeUrl) {
+                    const dashboardsRef = collection(db, 'dashboards');
+                    const q = query(
+                        dashboardsRef,
+                        where('iframe_url', '==', currentIframeUrl),
+                        limit(1)
+                    );
+                    
+                    const querySnapshot = await getDocs(q);
+                    
+                    if (!querySnapshot.empty) {
+                        setDashboardId(querySnapshot.docs[0].id);
+                    } else {
                         setDashboardId(null);
-                    } else if (data) {
-                        setDashboardId(data.id);
                     }
                 }
             } catch (error: any) {
-                console.error("Erro ao buscar dashboard por ID:", error);
+                console.error("Erro ao buscar dashboard por URL:", error);
             }
         };
 
@@ -153,21 +138,9 @@ export default function BIViewer({ dashboardUrl }: BIViewerProps) {
                 }
             }
         };
-    }, [supabase, currentIframeUrl]);
+    }, [user, currentIframeUrl]);
 
     useEffect(() => {
-        const handleDevTools = () => {
-            if (
-                window.outerWidth - window.innerWidth > 160 ||
-                window.outerHeight - window.innerHeight > 160
-            ) {
-                document.body.innerHTML = '<div style="display: flex; justify-content: center; align-items: center; height: 100vh; background-color: black; color: white; font-size: 24px;">Access Denied</div>';
-                document.body.style.overflow = 'hidden';
-                document.body.style.backgroundColor = 'black';
-                alert('DevTools detectado. Acesso bloqueado.');
-            }
-        };
-
         const inactivityInterval = setInterval(() => {
             if (Date.now() - lastActiveTime > inactivityThreshold) {
                 sendUsageData('inactivity', { duration: inactivityThreshold });
@@ -187,13 +160,10 @@ export default function BIViewer({ dashboardUrl }: BIViewerProps) {
 
         window.addEventListener('mousemove', throttledHandler as EventListener);
         window.addEventListener('click', throttledMouseTrack as EventListener);
-        //window.addEventListener('resize', handleDevTools);
-        //handleDevTools();
 
         return () => {
             window.removeEventListener('mousemove', throttledHandler as EventListener);
             window.removeEventListener('click', throttledMouseTrack as EventListener);
-            //window.removeEventListener('resize', handleDevTools);
             clearInterval(inactivityInterval);
         };
     }, [throttledMouseTrack, lastActiveTime, inactivityThreshold, sendUsageData]);
@@ -202,7 +172,7 @@ export default function BIViewer({ dashboardUrl }: BIViewerProps) {
         <div
             className="flex flex-col items-center justify-center relative h-full w-full overflow-hidden"
             onContextMenu={(e) => e.preventDefault()}
-            style={{ height: 'calc(100vh - 70px)' }} // Ajustado para viewport menos a altura do header
+            style={{ height: 'calc(100vh - 70px)' }}
         >
             {isLoading && (
                 <div className="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-800 z-10">
@@ -228,7 +198,6 @@ export default function BIViewer({ dashboardUrl }: BIViewerProps) {
                 </div>
             )}
 
-            {/* Contêiner do iframe com altura total menos a altura do header */}
             <div className="w-full h-full">
                 <iframe
                     ref={iframeRef}

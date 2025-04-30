@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { createClient } from '@/utils/supabase/client';
+import { confirmResetPassword } from '@/lib/firebase/auth';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
@@ -17,14 +17,16 @@ export default function ResetPasswordForm() {
     const [showConfirmPassword, setShowConfirmPassword] = useState<boolean>(false);
     const router = useRouter();
     const searchParams = useSearchParams();
-    const code = searchParams.get('code');
-    const supabase = createClient();
-
+    const oobCode = searchParams.get('oobCode'); // Firebase's password reset code
+    
     useEffect(() => {
-        if (!code) {
-            console.warn("Nenhum código para reset foi encontrado.");
+        if (!oobCode) {
+            toast.error("Link de redefinição de senha inválido ou expirado.");
+            setTimeout(() => {
+                router.push('/login');
+            }, 3000);
         }
-    }, [code]);
+    }, [oobCode, router]);
 
     const validatePassword = (password: string) => {
         if (password.length < 8) {
@@ -35,6 +37,11 @@ export default function ResetPasswordForm() {
 
     const handleResetPassword = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        if (!oobCode) {
+            toast.error("Link de redefinição de senha inválido ou expirado.");
+            return;
+        }
 
         const validationError = validatePassword(password);
         if (validationError) {
@@ -50,20 +57,23 @@ export default function ResetPasswordForm() {
         setLoading(true);
 
         try {
-            const { error } = await supabase.auth.updateUser({ password });
-
-            if (error) {
-                toast.error(`Password Reset Error: ${error.message}`);
-                console.error("Password Reset Error:", error);
-            } else {
-                toast.success("Sua senha foi atualizada com sucesso!");
-                setTimeout(() => {
-                    router.push('/login');
-                }, 2000);
-            }
+            await confirmResetPassword(oobCode, password);
+            toast.success("Sua senha foi atualizada com sucesso!");
+            setTimeout(() => {
+                router.push('/login');
+            }, 2000);
         } catch (error: any) {
-            toast.error(`Um erro inesperado ocorreu: ${error.message}`);
-            console.error("Erro inesperado:", error);
+            console.error("Erro ao resetar senha:", error);
+            
+            if (error.code === 'auth/expired-action-code') {
+                toast.error("Este link de redefinição de senha expirou.");
+            } else if (error.code === 'auth/invalid-action-code') {
+                toast.error("Este link de redefinição de senha é inválido.");
+            } else if (error.code === 'auth/weak-password') {
+                toast.error("Esta senha é muito fraca. Escolha uma senha mais forte.");
+            } else {
+                toast.error(`Um erro inesperado ocorreu: ${error.message}`);
+            }
         } finally {
             setLoading(false);
         }
@@ -143,7 +153,7 @@ export default function ResetPasswordForm() {
                             Atualizando...
                         </>
                     ) : (
-                        'Update Password'
+                        'Atualizar Senha'
                     )}
                 </Button>
             </div>

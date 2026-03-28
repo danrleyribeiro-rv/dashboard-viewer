@@ -1,6 +1,3 @@
-// src/components/theme-provider.tsx
-"use client";
-
 import { ThemeProvider as NextThemesProvider } from "next-themes";
 import { useEffect, useState } from 'react';
 import { ThemeProviderProps } from 'next-themes';

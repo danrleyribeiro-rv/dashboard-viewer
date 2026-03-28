@@ -1,18 +1,19 @@
-// src/context/auth-context.tsx
-"use client";
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { authApi } from '@/lib/api/client';
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { onAuthStateChanged, type User } from 'firebase/auth';
-import { auth } from '@/lib/firebase/config';
-import { getUserRole } from '@/lib/firebase/firestore';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '@/lib/firebase/config';
+interface User {
+  id: string;
+  email: string;
+  role: string;
+}
 
 interface AuthContextType {
   user: User | null;
   userRole: string | null;
   isClient: boolean | null;
   loading: boolean;
+  login: (email: string, password: string) => Promise<User>;
+  logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -20,63 +21,53 @@ const AuthContext = createContext<AuthContextType>({
   userRole: null,
   isClient: null,
   loading: true,
+  login: async () => ({ id: '', email: '', role: '' }),
+  logout: () => {},
 });
 
 export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [userRole, setUserRole] = useState<string | null>(null);
-  const [isClient, setIsClient] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const checkClientStatus = async (userId: string) => {
-    try {
-      const clientsRef = collection(db, 'clients');
-      const clientQuery = query(clientsRef, where('user_id', '==', userId));
-      const clientSnapshot = await getDocs(clientQuery);
-      return !clientSnapshot.empty;
-    } catch (error) {
-      console.error("Error checking client status:", error);
-      return false;
-    }
-  };
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (authUser) => {
-      if (authUser) {
-        setUser(authUser);
-        
-        try {
-          // Fetch user role from Firestore
-          const role = await getUserRole(authUser.email!);
-          setUserRole(role);
-          
-          // Check if the user exists in clients collection
-          if (role === 'client') {
-            const clientStatus = await checkClientStatus(authUser.uid);
-            setIsClient(clientStatus);
-          } else {
-            setIsClient(false);
-          }
-        } catch (error) {
-          console.error("Error fetching user data:", error);
-          setUserRole(null);
-          setIsClient(false);
-        }
-      } else {
-        setUser(null);
-        setUserRole(null);
-        setIsClient(null);
-      }
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
+  const logout = useCallback(() => {
+    localStorage.removeItem('auth_token');
+    setUser(null);
   }, []);
 
+  const login = useCallback(async (email: string, password: string): Promise<User> => {
+    const result = await authApi.login(email, password);
+    localStorage.setItem('auth_token', result.token);
+    setUser(result.user);
+    return result.user;
+  }, []);
+
+  useEffect(() => {
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+
+    authApi.me()
+      .then((userData) => {
+        setUser(userData);
+      })
+      .catch(() => {
+        localStorage.removeItem('auth_token');
+        setUser(null);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, []);
+
+  const userRole = user?.role ?? null;
+  const isClient = user ? user.role === 'client' : null;
+
   return (
-    <AuthContext.Provider value={{ user, userRole, isClient, loading }}>
+    <AuthContext.Provider value={{ user, userRole, isClient, loading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
